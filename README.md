@@ -1,0 +1,5 @@
+- 👋 Hi, I’m @3BMarkW3D USMC Veteran
+- 👀 I’m interested in ETH / ETC
+- 🌱 I’m currently learning ...Python
+- 💞️ I’m looking to collaborate on ...Eth Gorwrh/mining/ethermine
+- 📫 How to reach me ...Balthazarmarkw@yahoo.com 
