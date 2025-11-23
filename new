@@ -1,1 +1,154 @@
-99SiegeBot#2371
+import discord
+from discord.ext import commands
+import json
+import os
+import datetime
+
+# --- CONFIGURATION ---
+# Get your token from the Discord Developer Portal
+TOKEN = "YOUR_DISCORD_BOT_TOKEN_HERE"
+DATA_FILE = "playbook.json"
+
+# Intents are required for the bot to read messages and members
+intents = discord.Intents.default()
+intents.message_content = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# --- DATA MANAGEMENT ---
+def load_playbook():
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
+
+def save_playbook(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+# --- EVENTS ---
+@bot.event
+async def on_ready():
+    print(f"Coach {bot.user.name} is on the sidelines and ready!")
+    print("------")
+    # Check if we have a playbook file, if not, create one
+    if not os.path.exists(DATA_FILE):
+        save_playbook({})
+
+# --- COMMANDS ---
+
+@bot.command(name="counter", help="Get the best offensive plays for a specific defense. Usage: !counter <defense_name>")
+async def get_counter(ctx, *, defense_name: str):
+    """
+    Retrieves the counter strategy for a given defense.
+    Example: !counter Cover 3
+    """
+    playbook = load_playbook()
+    defense_key = defense_name.lower()
+
+    if defense_key in playbook:
+        strategy = playbook[defense_key]
+        
+        embed = discord.Embed(
+            title=f"📋 Offensive Coordinator Report",
+            description=f"**Defense:** {strategy['name'].title()}",
+            color=discord.Color.green(),
+            timestamp=datetime.datetime.now()
+        )
+        
+        embed.add_field(name="🎯 Top Counters", value=strategy['counters'], inline=False)
+        embed.add_field(name="💡 Coach's Notes", value=strategy['notes'], inline=False)
+        
+        if strategy.get('image_url'):
+            embed.set_image(url=strategy['image_url'])
+            
+        embed.set_footer(text=f"Play added by {strategy['author']}")
+        
+        await ctx.send(embed=embed)
+    else:
+        # Search for partial matches if exact match fails
+        matches = [k for k in playbook.keys() if defense_name.lower() in k]
+        if matches:
+            suggestions = ", ".join([playbook[m]['name'] for m in matches])
+            await ctx.send(f"❌ I don't have an exact match for **'{defense_name}'**, but I found these similar setups: **{suggestions}**.")
+        else:
+            await ctx.send(f"❌ Unrecognized defense: **'{defense_name}'**. Use `!add_play` to add it to the playbook!")
+
+@bot.command(name="add_play", help="Add a new defense and its counters. Usage: !add_play <defense_name> | <counters> | <notes>")
+async def add_play(ctx, *, content: str):
+    """
+    Adds a new strategy to the database.
+    Format: Defense Name | Best Plays/Counters | Extra Notes
+    Example: !add_play Cover 2 Man | HB Toss, Deep Post | Watch for the safety blitz
+    """
+    try:
+        # Split the input by the "|" character
+        parts = [part.strip() for part in content.split('|')]
+        
+        if len(parts) < 2:
+            await ctx.send("⚠️ Format error! Please use: `!add_play Defense Name | Counter Plays | Notes`")
+            return
+
+        defense_name = parts[0]
+        counters = parts[1]
+        notes = parts[2] if len(parts) > 2 else "No specific notes."
+        
+        # Check for image attachments (screenshots of the defense)
+        image_url = ctx.message.attachments[0].url if ctx.message.attachments else None
+
+        playbook = load_playbook()
+        playbook[defense_name.lower()] = {
+            "name": defense_name,
+            "counters": counters,
+            "notes": notes,
+            "author": ctx.author.display_name,
+            "image_url": image_url
+        }
+        
+        save_playbook(playbook)
+        
+        await ctx.send(f"✅ **{defense_name}** has been added to the playbook! Good work, Coach.")
+
+    except Exception as e:
+        await ctx.send(f"⚠️ Error adding play: {e}")
+
+@bot.command(name="playbook", help="List all known defensive formations.")
+async def list_plays(ctx):
+    """
+    Lists all defenses currently in the bot's database.
+    """
+    playbook = load_playbook()
+    
+    if not playbook:
+        await ctx.send("The playbook is empty! Use `!add_play` to start building our strategy.")
+        return
+
+    # Sort defenses alphabetically
+    defenses = sorted([data['name'] for data in playbook.values()])
+    
+    # Create a clean list string
+    defense_list = "\n".join([f"• {d}" for d in defenses])
+    
+    embed = discord.Embed(
+        title="📚 Team Playbook",
+        description="Here are the defensive formations we have counters for:",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="Defenses", value=defense_list or "None", inline=False)
+    
+    await ctx.send(embed=embed)
+
+@bot.command(name="delete_play", help="Remove a play. Admin only.")
+@commands.has_permissions(administrator=True)
+async def delete_play(ctx, *, defense_name: str):
+    playbook = load_playbook()
+    defense_key = defense_name.lower()
+    
+    if defense_key in playbook:
+        del playbook[defense_key]
+        save_playbook(playbook)
+        await ctx.send(f"🗑️ Removed **{defense_name}** from the playbook.")
+    else:
+        await ctx.send(f"❌ Could not find **{defense_name}**.")
+
+bot.run(TOKEN)99SiegeBot#2371
